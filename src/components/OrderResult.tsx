@@ -21,9 +21,9 @@ export function OrderSuccess({ order, orderNumber, onNewOrder }: SuccessProps) {
   )
 }
 
-type SoldOutProps = { order: Order; seatsLeft: number; onEdit(): void }
+type SoldOutProps = { order: Order; seatsLeft: number; onEdit(): void; onRecheck(): void }
 
-export function OrderSoldOut({ order, seatsLeft, onEdit }: SoldOutProps) {
+export function OrderSoldOut({ order, seatsLeft, onEdit, onRecheck }: SoldOutProps) {
   return (
     <div className="card result result--sold-out">
       <p className="result__icon" aria-hidden="true">
@@ -41,7 +41,12 @@ export function OrderSoldOut({ order, seatsLeft, onEdit }: SoldOutProps) {
           </button>
         </>
       ) : (
-        <p>Все билеты раскуплены, пока вы оформляли заказ. Деньги не списаны.</p>
+        <>
+          <p>Все билеты раскуплены, пока вы оформляли заказ. Деньги не списаны. Иногда места возвращаются — например, если кто-то не оплатил бронь.</p>
+          <button type="button" className="button button--ghost" onClick={onRecheck}>
+            Проверить места снова
+          </button>
+        </>
       )}
     </div>
   )

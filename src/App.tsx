@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { EventInfo, TicketApi } from './api/ticketApi'
 import { EventHeader } from './components/EventHeader'
 import { OrderReview } from './components/OrderReview'
@@ -21,22 +21,13 @@ const STEP_OF_SCREEN: Record<Screen['name'], StepName> = {
 }
 
 export default function App({ api }: { api: TicketApi }) {
-  const [event, setEvent] = useState<EventInfo>()
+  const { event, failed, reload, setSeatsLeft } = useEvent(api)
   const [draft, setDraft] = useState(emptyDraft)
   const [screen, setScreen] = useState<Screen>({ name: 'form', showErrors: false })
-  const contentRef = useFocusOnChange<HTMLDivElement>(screen.name)
+  const contentRef = useFocusHeadingOnChange<HTMLDivElement>(screen.name)
 
-  useEffect(() => {
-    let active = true
-    api.getEvent().then((loaded) => active && setEvent(loaded))
-    return () => {
-      active = false
-    }
-  }, [api])
-
+  if (failed) return <LoadError onRetry={reload} />
   if (!event) return <p className="loading">Загружаем мероприятие…</p>
-
-  const setSeatsLeft = (seatsLeft: number) => setEvent({ ...event, seatsLeft })
 
   const confirm = async (order: Order) => {
     setScreen({ name: 'review', order, submitting: true })
@@ -47,11 +38,16 @@ export default function App({ api }: { api: TicketApi }) {
         setScreen({ name: 'sold_out', order, seatsLeft: result.seatsLeft })
         return
       }
-      setEvent(await api.getEvent())
+      setSeatsLeft(result.seatsLeft)
       setScreen({ name: 'success', order, orderNumber: result.orderNumber })
     } catch {
       setScreen({ name: 'review', order, submitting: false, error: 'Не получилось оформить заказ. Попробуйте ещё раз.' })
     }
+  }
+
+  const recheckSeats = async () => {
+    await reload()
+    setScreen({ name: 'form', showErrors: true })
   }
 
   const startNewOrder = () => {
@@ -65,7 +61,7 @@ export default function App({ api }: { api: TicketApi }) {
     <main className="page">
       <EventHeader event={event} />
       {!soldOutOnArrival && <Stepper current={STEP_OF_SCREEN[screen.name]} />}
-      <div ref={contentRef} tabIndex={-1} className="content">
+      <div ref={contentRef}>
         {soldOutOnArrival && <EventSoldOut />}
         {!soldOutOnArrival && screen.name === 'form' && (
           <ParticipantsForm
@@ -93,6 +89,7 @@ export default function App({ api }: { api: TicketApi }) {
             order={screen.order}
             seatsLeft={screen.seatsLeft}
             onEdit={() => setScreen({ name: 'form', showErrors: true })}
+            onRecheck={recheckSeats}
           />
         )}
       </div>
@@ -100,15 +97,59 @@ export default function App({ api }: { api: TicketApi }) {
   )
 }
 
-/** При смене экрана переводит фокус (и прокрутку) к началу нового шага — важно на телефоне и для скринридеров. */
-function useFocusOnChange<T extends HTMLElement>(key: string) {
+function useEvent(api: TicketApi) {
+  const [event, setEvent] = useState<EventInfo>()
+  const [failed, setFailed] = useState(false)
+
+  const reload = useCallback(
+    () =>
+      api.getEvent().then(
+        (loaded) => {
+          setEvent(loaded)
+          setFailed(false)
+        },
+        () => setFailed(true),
+      ),
+    [api],
+  )
+
+  useEffect(() => {
+    reload()
+  }, [reload])
+
+  const setSeatsLeft = (seatsLeft: number) => setEvent((current) => current && { ...current, seatsLeft })
+
+  return { event, failed, reload, setSeatsLeft }
+}
+
+function LoadError({ onRetry }: { onRetry(): void }) {
+  return (
+    <main className="page">
+      <div className="card result" role="alert">
+        <h2>Не удалось загрузить мероприятие</h2>
+        <p>Проверьте интернет и попробуйте ещё раз.</p>
+        <button type="button" className="button button--primary" onClick={onRetry}>
+          Повторить
+        </button>
+      </div>
+    </main>
+  )
+}
+
+/**
+ * При смене экрана переводит фокус (и прокрутку) на заголовок нового шага:
+ * на телефоне он оказывается в начале экрана, скринридер его зачитывает.
+ */
+function useFocusHeadingOnChange<T extends HTMLElement>(key: string) {
   const ref = useRef<T>(null)
   const previousKey = useRef(key)
 
   useEffect(() => {
     if (previousKey.current === key) return
     previousKey.current = key
-    ref.current?.focus()
+    const heading = ref.current?.querySelector('h2')
+    heading?.setAttribute('tabindex', '-1')
+    heading?.focus()
   }, [key])
 
   return ref

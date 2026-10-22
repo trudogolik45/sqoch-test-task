@@ -82,6 +82,13 @@ describe('validateOrder', () => {
     expect(errors.order).toBe('Детей до 14 лет пропускаем только вместе с участником от 18 лет — добавьте взрослого')
   })
 
+  it('не требует взрослого, если он есть, но ещё без имени', () => {
+    const errors = errorsOf(draft({ participants: [participant('', '35', 'p1'), participant('Миша', '7')] }))
+
+    expect(errors.participants.p1?.name).toBe('Укажите имя')
+    expect(errors.order).toBeUndefined()
+  })
+
   it('пускает подростка 14–17 лет без взрослого', () => {
     expect(validateOrder(draft({ participants: [participant('Оля', '16')] }), 4).ok).toBe(true)
   })

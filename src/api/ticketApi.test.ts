@@ -28,7 +28,7 @@ describe('createTicketApi', () => {
 
     const result = await api.placeOrder(orderFor(3))
 
-    expect(result).toEqual({ status: 'confirmed', orderNumber: 'SQ-1001' })
+    expect(result).toEqual({ status: 'confirmed', orderNumber: 'SQ-1001', seatsLeft: 2 })
     expect((await api.getEvent()).seatsLeft).toBe(2)
   })
 
@@ -38,7 +38,7 @@ describe('createTicketApi', () => {
     await api.placeOrder(orderFor(1))
     const second = await api.placeOrder(orderFor(1))
 
-    expect(second).toEqual({ status: 'confirmed', orderNumber: 'SQ-1002' })
+    expect(second).toEqual({ status: 'confirmed', orderNumber: 'SQ-1002', seatsLeft: 3 })
   })
 
   it('отказывает, если мест меньше, чем участников, и ничего не списывает', async () => {

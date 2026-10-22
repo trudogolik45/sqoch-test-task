@@ -1,13 +1,17 @@
+import { StrictMode } from 'react'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import App from './App'
-import { createTicketApi } from './api/ticketApi'
+import { type TicketApi, createTicketApi } from './api/ticketApi'
 
-function setup(seatsLeft = 50) {
-  const api = createTicketApi({ seatsLeft, delayMs: 0 })
+function setup(seatsLeft = 50, api: TicketApi = createTicketApi({ seatsLeft, delayMs: 0 })) {
   const user = userEvent.setup()
-  render(<App api={api} />)
+  render(
+    <StrictMode>
+      <App api={api} />
+    </StrictMode>,
+  )
   return { api, user }
 }
 
@@ -143,6 +147,66 @@ describe('оформление билетов', () => {
     expect(await screen.findByRole('heading', { name: 'Места закончились' })).toBeInTheDocument()
     expect(screen.getByText(/Все билеты раскуплены/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Изменить состав заказа' })).not.toBeInTheDocument()
+  })
+
+  it('после полной распродажи даёт начать заново, если места вернулись', async () => {
+    const { api, user } = setup()
+    await fillFamilyOrder(user)
+    await goToReview(user)
+    api.setSeatsLeft(0)
+    await user.click(screen.getByRole('button', { name: /Подтвердить и оплатить/ }))
+    await screen.findByRole('heading', { name: 'Места закончились' })
+    api.setSeatsLeft(10)
+
+    await user.click(screen.getByRole('button', { name: 'Проверить места снова' }))
+
+    expect(await screen.findByText('Осталось 10 мест')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Участники' })).toBeInTheDocument()
+    expect(within(participantGroup(2)).getByLabelText('Имя')).toHaveValue('Миша')
+  })
+
+  it('отправляет заказ один раз при двойном клике', async () => {
+    const api = createTicketApi({ seatsLeft: 50, delayMs: 50 })
+    const placeOrder = vi.spyOn(api, 'placeOrder')
+    const { user } = setup(50, api)
+    await fillFamilyOrder(user)
+    await goToReview(user)
+
+    await user.dblClick(screen.getByRole('button', { name: /Подтвердить и оплатить/ }))
+
+    expect(await screen.findByRole('heading', { name: 'Заказ SQ-1001 оформлен' })).toBeInTheDocument()
+    expect(placeOrder).toHaveBeenCalledTimes(1)
+  })
+
+  it('переводит фокус на заголовок нового шага', async () => {
+    const { user } = setup()
+    await fillFamilyOrder(user)
+
+    await goToReview(user)
+
+    expect(screen.getByRole('heading', { name: 'Проверьте заказ' })).toHaveFocus()
+  })
+
+  it('после удаления участника ставит фокус на «Добавить участника»', async () => {
+    const { user } = setup()
+    await screen.findByRole('heading', { name: 'Участники' })
+    await user.click(screen.getByRole('button', { name: 'Добавить участника' }))
+
+    await user.click(screen.getByRole('button', { name: 'Удалить участника 2' }))
+
+    expect(screen.getByRole('button', { name: 'Добавить участника' })).toHaveFocus()
+  })
+
+  it('предлагает повторить, если мероприятие не загрузилось', async () => {
+    const api = createTicketApi({ seatsLeft: 5, delayMs: 0 })
+    const getEvent = vi.spyOn(api, 'getEvent').mockRejectedValue(new Error('сеть'))
+    const { user } = setup(5, api)
+    const retry = await screen.findByRole('button', { name: 'Повторить' })
+    getEvent.mockRestore()
+
+    await user.click(retry)
+
+    expect(await screen.findByRole('heading', { name: 'Участники' })).toBeInTheDocument()
   })
 
   it('сообщает о распроданном мероприятии сразу при открытии', async () => {

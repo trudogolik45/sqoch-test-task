@@ -14,7 +14,6 @@ async function fillParticipant(page: Page, number: number, name: string, age: st
 }
 
 async function fillFamilyOrder(page: Page) {
-  await page.goto('/')
   await fillParticipant(page, 1, 'Анна Смирнова', '35')
   await page.getByRole('button', { name: 'Добавить участника' }).click()
   await fillParticipant(page, 2, 'Миша', '7')
@@ -43,6 +42,7 @@ test('успешное оформление', async ({ page }) => {
 })
 
 test('места закончились перед подтверждением', async ({ page }) => {
+  await page.goto('/')
   await fillFamilyOrder(page)
   await page.getByRole('button', { name: 'Перейти к проверке' }).click()
 
@@ -72,6 +72,7 @@ test('без горизонтальной прокрутки на каждом �
     expect(width).toBeLessThanOrEqual(page.viewportSize()!.width)
   }
 
+  await page.goto('/')
   await fillFamilyOrder(page)
   await expectNoHorizontalScroll()
   await page.getByRole('button', { name: 'Перейти к проверке' }).click()

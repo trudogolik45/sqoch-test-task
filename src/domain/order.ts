@@ -1,9 +1,12 @@
+export type TicketType = 'full' | 'child'
+
+/** Правила мероприятия — меняются здесь, интерфейс и тексты подхватывают их сами. */
 export const MAX_PARTICIPANTS = 4
 export const CHILD_AGE_LIMIT = 14
 export const GUARDIAN_AGE = 18
+export const PRICE: Record<TicketType, number> = { full: 2000, child: 1000 }
 const MAX_AGE = 120
 
-export type TicketType = 'full' | 'child'
 export type Ticket = { type: TicketType; price: number }
 
 export type ParticipantDraft = { id: string; name: string; age: string }
@@ -34,8 +37,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const AGE_PATTERN = /^\d+$/
 
 export function ticketFor(age: number): Ticket {
-  if (age < CHILD_AGE_LIMIT) return { type: 'child', price: 1000 }
-  return { type: 'full', price: 2000 }
+  const type: TicketType = age < CHILD_AGE_LIMIT ? 'child' : 'full'
+  return { type, price: PRICE[type] }
 }
 
 export function parseAge(raw: string): number | null {
@@ -57,12 +60,12 @@ export function validateOrder(draft: OrderDraft, seatsLeft: number): ValidationR
   const emailError = validateEmail(draft.email)
   if (emailError) errors.email = emailError
 
-  const participants = draft.participants.flatMap(toParticipant)
-  const orderError = validateComposition(draft.participants.length, participants, seatsLeft)
+  const orderError = validateComposition(draft.participants, seatsLeft)
   if (orderError) errors.order = orderError
 
   if (Object.keys(errors.participants).length > 0 || errors.email || errors.order) return { ok: false, errors }
 
+  const participants = draft.participants.map(toParticipant)
   const total = participants.reduce((sum, participant) => sum + participant.ticket.price, 0)
   return { ok: true, order: { participants, email: draft.email.trim(), total } }
 }
@@ -81,7 +84,8 @@ function validateEmail(raw: string): string | undefined {
   if (!EMAIL_PATTERN.test(email)) return 'Проверьте email: например, name@mail.ru'
 }
 
-function validateComposition(count: number, participants: Participant[], seatsLeft: number): string | undefined {
+function validateComposition(participants: ParticipantDraft[], seatsLeft: number): string | undefined {
+  const count = participants.length
   if (count === 0) return 'Добавьте хотя бы одного участника'
   if (count > MAX_PARTICIPANTS) return `В одном заказе — не больше ${MAX_PARTICIPANTS} участников`
   if (count > seatsLeft) return `Осталось мест: ${seatsLeft} — уберите лишних участников`
@@ -90,14 +94,16 @@ function validateComposition(count: number, participants: Participant[], seatsLe
   }
 }
 
-function needsGuardian(participants: Participant[]): boolean {
-  const hasChild = participants.some(({ ticket }) => ticket.type === 'child')
-  const hasGuardian = participants.some(({ age }) => age >= GUARDIAN_AGE)
+/** Смотрим только на возраст: незаполненное имя взрослого — ошибка поля, а не отсутствие взрослого. */
+function needsGuardian(participants: ParticipantDraft[]): boolean {
+  const ages = participants.map(({ age }) => parseAge(age)).filter((age) => age !== null)
+  const hasChild = ages.some((age) => age < CHILD_AGE_LIMIT)
+  const hasGuardian = ages.some((age) => age >= GUARDIAN_AGE)
   return hasChild && !hasGuardian
 }
 
-function toParticipant(draft: ParticipantDraft): Participant[] {
-  const age = parseAge(draft.age)
-  if (age === null || !draft.name.trim()) return []
-  return [{ id: draft.id, name: draft.name.trim(), age, ticket: ticketFor(age) }]
+/** Вызывается только для проверенного черновика: имя и возраст уже валидны. */
+function toParticipant(draft: ParticipantDraft): Participant {
+  const age = Number(draft.age.trim())
+  return { id: draft.id, name: draft.name.trim(), age, ticket: ticketFor(age) }
 }

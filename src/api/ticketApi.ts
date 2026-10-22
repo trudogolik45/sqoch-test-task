@@ -8,7 +8,7 @@ export type EventInfo = {
 }
 
 export type PlaceOrderResult =
-  | { status: 'confirmed'; orderNumber: string }
+  | { status: 'confirmed'; orderNumber: string; seatsLeft: number }
   | { status: 'sold_out'; seatsLeft: number }
 
 export type TicketApi = {
@@ -42,7 +42,7 @@ export function createTicketApi({ seatsLeft, delayMs }: Options): TicketApi {
       respond((): PlaceOrderResult => {
         if (order.participants.length > seats) return { status: 'sold_out', seatsLeft: seats }
         seats -= order.participants.length
-        return { status: 'confirmed', orderNumber: `SQ-${nextOrderNumber++}` }
+        return { status: 'confirmed', orderNumber: `SQ-${nextOrderNumber++}`, seatsLeft: seats }
       }),
     setSeatsLeft: (value) => {
       seats = value

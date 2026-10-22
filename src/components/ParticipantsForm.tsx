@@ -2,6 +2,7 @@ import { type SubmitEvent, type ReactNode, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import {
   CHILD_AGE_LIMIT,
+  GUARDIAN_AGE,
   MAX_PARTICIPANTS,
   type FieldErrors,
   type Order,
@@ -27,6 +28,7 @@ type Props = {
 export function ParticipantsForm({ draft, seatsLeft, showErrorsInitially, onChange, onSubmit }: Props) {
   const [showErrors, setShowErrors] = useState(showErrorsInitially)
   const orderErrorRef = useRef<HTMLParagraphElement>(null)
+  const addButtonRef = useRef<HTMLButtonElement>(null)
   const validation = validateOrder(draft, seatsLeft)
   const errors = showErrors && !validation.ok ? validation.errors : undefined
   const maxParticipants = Math.min(MAX_PARTICIPANTS, seatsLeft)
@@ -34,8 +36,10 @@ export function ParticipantsForm({ draft, seatsLeft, showErrorsInitially, onChan
   const updateParticipant = (updated: ParticipantDraft) =>
     onChange({ ...draft, participants: draft.participants.map((p) => (p.id === updated.id ? updated : p)) })
 
-  const removeParticipant = (id: string) =>
-    onChange({ ...draft, participants: draft.participants.filter((p) => p.id !== id) })
+  const removeParticipant = (id: string) => {
+    flushSync(() => onChange({ ...draft, participants: draft.participants.filter((p) => p.id !== id) }))
+    addButtonRef.current?.focus()
+  }
 
   const addParticipant = () => onChange({ ...draft, participants: [...draft.participants, newParticipant()] })
 
@@ -53,8 +57,8 @@ export function ParticipantsForm({ draft, seatsLeft, showErrorsInitially, onChan
     <form className="card" onSubmit={handleSubmit} noValidate>
       <h2>Участники</h2>
       <p className="muted">
-        До {MAX_PARTICIPANTS} человек в заказе. Детям до {CHILD_AGE_LIMIT} лет — детский билет, им нужен взрослый от 18
-        лет в этом же заказе.
+        До {MAX_PARTICIPANTS} человек в заказе. Детям до {CHILD_AGE_LIMIT} лет — детский билет, им нужен взрослый от{' '}
+        {GUARDIAN_AGE} лет в этом же заказе.
       </p>
 
       <div className="participants">
@@ -72,6 +76,7 @@ export function ParticipantsForm({ draft, seatsLeft, showErrorsInitially, onChan
       </div>
 
       <button
+        ref={addButtonRef}
         type="button"
         className="button button--ghost"
         onClick={addParticipant}
